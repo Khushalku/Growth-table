@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elite System Vault</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #020617;
+            --card: rgba(15, 23, 42, 0.95);
+            --accent: #38bdf8;
+            --text: #f1f5f9;
+            --muted: #64748b;
+            --border: rgba(255, 255, 255, 0.1);
+            --reward: #22c55e;
+            --danger: #ef4444;
+            --vault-metal: #1e293b;
+        }
+
+        * { box-sizing: border-box; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); outline: none; }
+        body, html { 
+            margin: 0; padding: 0; font-family: 'Poppins', sans-serif; 
+            background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; 
+            perspective: 2000px;
+        }
+
+        /* --- 3D VAULT SCENE --- */
+        #vaultScene {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transform-style: preserve-3d;
+        }
+
+        /* --- VAULT DOOR (CALCULATOR) --- */
+        #calcDoor {
+            position: absolute;
+            width: 340px;
+            z-index: 100;
+            background: var(--vault-metal);
+            padding: 25px;
+            border-radius: 25px;
+            box-shadow: 0 30px 60px rgba(0,0,0,1);
+            border: 4px solid #334155;
+            transform-origin: left center;
+            backface-visibility: hidden;
+        }
+
+        .door-open {
+            transform: rotateY(-110deg) translateZ(50px);
+            opacity: 0.1;
+            pointer-events: none;
+        }
+
+        #calcDisplay { 
+            width: 100%; height: 70px; background: #0f172a; border: 2px solid #334155; margin-bottom: 20px; 
+            text-align: right; color: var(--accent); padding: 10px; font-size: 32px; font-family: 'Orbitron';
+            border-radius: 12px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+        }
+
+        .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .calc-btn { height: 55px; border-radius: 12px; border: none; background: #334155; color: white; font-size: 18px; cursor: pointer; font-family: 'Poppins'; }
+        .calc-btn:hover { background: #475569; }
+        .calc-btn.op { background: #1e293b; color: var(--accent); }
+        .calc-btn.eq { background: var(--accent); color: #000; font-weight: bold; }
+
+        /* --- DASHBOARD (INTERNAL) --- */
+        #dashboard { 
+            width: 95%; max-width: 850px; height: 90vh; overflow-y: auto; padding: 25px;
+            opacity: 0; transform: translateZ(-500px) scale(0.8); 
+            pointer-events: none;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent) transparent;
+        }
+
+        #dashboard.show-content {
+            opacity: 1;
+            transform: translateZ(0) scale(1);
+            pointer-events: all;
+        }
+
+        .glass-card {
+            background: var(--card); backdrop-filter: blur(20px); border: 1px solid var(--border);
+            border-radius: 24px; padding: 25px; margin-bottom: 20px;
+        }
+
+        /* --- EMERGENCY OVERLAY --- */
+        #urgeOverlay {
+            position: fixed; inset: 0; background: rgba(2, 6, 23, 0.98); z-index: 2000;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; padding: 30px;
+        }
+        .breathe-box {
+            width: 180px; height: 180px; border: 8px solid var(--accent); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Orbitron'; color: var(--accent); font-size: 1.2rem;
+            animation: breatheAnim 8s infinite ease-in-out;
+            margin-bottom: 40px; box-shadow: 0 0 50px var(--accent);
+        }
+        @keyframes breatheAnim { 0%, 100% { transform: scale(0.85); } 50% { transform: scale(1.15); } }
+
+        /* --- PROGRESS UI --- */
+        .hero { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 20px; }
+        .ring-container { position: relative; width: 150px; height: 150px; }
+        svg { transform: rotate(-90deg); width: 150px; height: 150px; }
+        circle { fill: none; stroke-width: 12; stroke-linecap: round; }
+        .ring-bg { stroke: rgba(255,255,255,0.05); }
+        .ring-prog { stroke: var(--accent); stroke-dasharray: 408; stroke-dashoffset: 408; }
+        .percent-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Orbitron'; font-size: 1.5rem; font-weight: bold; }
+
+        .graph-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .graph-container { display: flex; align-items: flex-end; justify-content: space-between; height: 100px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+        .bar { width: 10%; background: #1e293b; border-radius: 4px 4px 0 0; position: relative; min-height: 5px; }
+        .bar.active { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+        .bar::after { content: attr(data-day); position: absolute; bottom: -20px; left: 0; width: 100%; font-size: 9px; text-align: center; color: var(--muted); }
+
+        table { width: 100%; border-collapse: collapse; }
+        td { padding: 15px; border-bottom: 1px solid var(--border); }
+        .quote { font-style: italic; font-size: 0.85rem; color: var(--accent); display: block; }
+        .reward { font-weight: bold; font-size: 0.85rem; color: var(--reward); }
+
+        .panic-btn { position: fixed; bottom: 30px; right: 30px; width: 65px; height: 65px; background: var(--danger); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 150; font-size: 28px; box-shadow: 0 0 30px rgba(239, 68, 68, 0.5); }
+        .btn-base { width: 100%; padding: 12px; border-radius: 10px; border: none; font-family: 'Orbitron'; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .btn-accent { background: var(--accent); color: #000; }
+        .btn-danger { background: var(--danger); color: #fff; }
+
+        canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 999; }
+        .hidden { display: none !important; }
+        input[type="password"] { width: 100%; padding: 10px; background: #000; border: 1px solid var(--border); border-radius: 8px; color: white; margin-bottom: 10px; font-family: 'Orbitron'; }
+    </style>
+</head>
+<body>
+
+<canvas id="confetti"></canvas>
+
+<!-- URGE OVERLAY -->
+<div id="urgeOverlay">
+    <h1 style="font-family: 'Orbitron'; color: var(--danger);">URGE KILLER ACTIVATED</h1>
+    <div class="breathe-box" id="breatheText">BREATHE</div>
+    <div class="glass-card" style="max-width: 400px; text-align: left;">
+        <p>1. Drink ice cold water immediately.<br>2. Do 20 squats right now.<br>3. Most urges fade in 15 minutes.</p>
+    </div>
+    <button class="btn-base btn-accent" style="max-width: 400px;" onclick="closeUrge()">I AM IN CONTROL</button>
+</div>
+
+<div id="vaultScene">
+    <!-- CALCULATOR DOOR -->
+    <div id="calcDoor">
+        <input type="text" id="calcDisplay" readonly value="0">
+        <div class="calc-grid">
+            <button class="calc-btn op" onclick="calcClear()">C</button>
+            <button class="calc-btn op" onclick="calcInput('/')">÷</button>
+            <button class="calc-btn op" onclick="calcInput('*')">×</button>
+            <button class="calc-btn op" onclick="calcBackspace()">⌫</button>
+            
+            <button class="calc-btn" onclick="calcInput('7')">7</button>
+            <button class="calc-btn" onclick="calcInput('8')">8</button>
+            <button class="calc-btn" onclick="calcInput('9')">9</button>
+            <button class="calc-btn op" onclick="calcInput('-')">−</button>
+            
+            <button class="calc-btn" onclick="calcInput('4')">4</button>
+            <button class="calc-btn" onclick="calcInput('5')">5</button>
+            <button class="calc-btn" onclick="calcInput('6')">6</button>
+            <button class="calc-btn op" onclick="calcInput('+')">+</button>
+            
+            <button class="calc-btn" onclick="calcInput('1')">1</button>
+            <button class="calc-btn" onclick="calcInput('2')">2</button>
+            <button class="calc-btn" onclick="calcInput('3')">3</button>
+            <button class="calc-btn eq" onclick="processEqual()">=</button>
+            
+            <button class="calc-btn" style="grid-column: span 2" onclick="calcInput('0')">0</button>
+            <button class="calc-btn" onclick="calcInput('.')">.</button>
+        </div>
+    </div>
+
+    <!-- DASHBOARD (INTERIOR) -->
+    <div id="dashboard">
+        <div class="header" style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <h2 style="font-family:Orbitron; color:var(--accent); margin:0;">VAULT_SECURE</h2>
+                <div id="realClock" style="font-size:0.8rem; color:var(--muted)">00:00:00</div>
+            </div>
+            <button onclick="location.reload()" style="background:none; border:1px solid var(--border); color:var(--muted); padding:5px 15px; border-radius:8px; cursor:pointer; font-family: Orbitron; font-size: 0.7rem;">LOCK</button>
+        </div>
+
+        <!-- INITIALIZATION MODULE -->
+        <div id="startModule" class="glass-card" style="text-align:center;">
+            <h3 style="font-family:Orbitron;">MISSION INITIALIZATION</h3>
+            <p style="color:var(--muted); font-size:0.8rem;">Select your objective length</p>
+            <select id="setLen" style="padding:12px; background:#000; color:var(--accent); border:1px solid var(--accent); width:100%; border-radius:10px; font-family:Orbitron; margin-bottom:20px;">
+                <option value="15">15 DAYS</option>
+                <option value="30" selected>30 DAYS</option>
+                <option value="60">60 DAYS</option>
+                <option value="90">90 DAYS</option>
+            </select>
+            <button class="btn-base btn-accent" onclick="startChallenge()">INITIATE STREAK</button>
+        </div>
+
+        <!-- CONTENT MODULE -->
+        <div id="activeContent" class="hidden">
+            <div class="glass-card" style="text-align:center; font-family:Orbitron; font-size:1.6rem; color:var(--accent); letter-spacing:2px;" id="countDisplay">00d 00h 00m 00s</div>
+            
+            <div class="hero glass-card">
+                <div class="ring-container">
+                    <svg><circle class="ring-bg" cx="75" cy="75" r="65"/><circle class="ring-prog" id="ringProg" cx="75" cy="75" r="65"/></svg>
+                    <div class="percent-text" id="percentLabel">0%</div>
+                </div>
+                <div style="display:flex; flex-direction:column; flex:1; gap:10px;">
+                    <div class="stat-box" style="text-align:center; background:rgba(255,255,255,0.03); padding:10px; border-radius:15px; border: 1px solid var(--border);">
+                        <span id="curStr" style="font-size:1.5rem; color:var(--accent); font-family:Orbitron;">0</span>
+                        <div style="font-size:10px; color:var(--muted)">STREAK</div>
+                    </div>
+                    <div class="stat-box" style="text-align:center; background:rgba(255,255,255,0.03); padding:10px; border-radius:15px; border: 1px solid var(--border);">
+                        <span id="bstStr" style="font-size:1.5rem; color:var(--accent); font-family:Orbitron;">0</span>
+                        <div style="font-size:10px; color:var(--muted)">RECORD</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <div class="graph-nav">
+                    <button class="btn-base" style="width:50px; margin-top:0;" onclick="moveGraph(-1)">◀</button>
+                    <span id="weekLabel" style="font-family:Orbitron; font-size:10px;">WEEK 1</span>
+                    <button class="btn-base" style="width:50px; margin-top:0;" onclick="moveGraph(1)">▶</button>
+                </div>
+                <div class="graph-container" id="progGraph"></div>
+            </div>
+
+            <div class="scroll-area"><table id="tableContent"></table></div>
+
+            <div class="glass-card" style="margin-top:20px;">
+                <h4 style="font-family:Orbitron; margin:0 0 15px 0; font-size: 0.8rem;">SECURITY CENTER</h4>
+                <input type="password" id="oldPInput" placeholder="Current PIN">
+                <input type="password" id="newPInput" placeholder="New PIN">
+                <button class="btn-base btn-accent" onclick="changePin()">CHANGE ACCESS PIN</button>
+                <button class="btn-base btn-danger" style="margin-top:30px;" onclick="factoryReset()">⚠️ FACTORY RESET</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="panic-btn" onclick="openUrge()">🔥</div>
+
+<script>
+    const motivationData = [
+        ["I decide who I become.","Hot shower"], ["Urges are temporary. Pride is permanent.","Snack"],
+        ["Discipline today = confidence tomorrow.","YouTube"], ["I choose better.","Tea"],
+        ["Every no makes me stronger.","Hobby"], ["I control impulses.","Movie"],
+        ["One week strong.","Eat out"], ["Focus is coming back.","Walk"],
+        ["Self-respect grows.","Playlist"], ["Future > moment.","Small gift"],
+        ["Urges don’t control me.","Long sleep"], ["Strength is habit.","Favorite food"],
+        ["Discipline by choice.","Call friend"], ["Two weeks strong.","Film night"],
+        ["Not my past.","Selfie"], ["Protect my energy.","Note taking"],
+        ["Clarity over chaos.","Quiet night"], ["Hard moments build me.","Self-care"],
+        ["Respect myself.","Workout"], ["Face life.","Dessert"],
+        ["Three weeks strong.","Purchase"], ["Mind is sharper.","Rest"],
+        ["Mastering myself.","Nature"], ["Freedom > fantasy.","Show"],
+        ["Choose real life.","Music"], ["Discipline changes everything.","Log wins"],
+        ["Proud of myself.","Rest"], ["Four weeks strong.","Outing"],
+        ["New normal.","Set goal"], ["Promise kept.","Celebration 🎉"]
+    ];
+
+    let graphWeekOffset = 0;
+    
+    // --- MASTER PIN FETCH ---
+    function getStoredPin() { return localStorage.getItem('userPin') || "1234"; }
+
+    // Init PIN
+    if(!localStorage.getItem('userPin')) {
+        let p = prompt("Setup: Set 4-digit PIN for the Vault:");
+        localStorage.setItem('userPin', (p && p.length === 4) ? p : "1234");
+    }
+
+    // --- VAULT TRANSITION ---
+    function processEqual() {
+        const input = document.getElementById('calcDisplay').value;
+        const currentPin = getStoredPin();
+
+        // CODES
+        if(input === "1010") { factoryReset(); return; }
+        if(input === "5476") {
+            let o = prompt("Recovery: Enter Old PIN:");
+            if(o === currentPin) {
+                let n = prompt("Identity Verified. Enter New 4-digit PIN:");
+                if(n && n.length === 4) { localStorage.setItem('userPin', n); alert("PIN Updated."); }
+            }
+            return;
+        }
+
+        if(input === currentPin) {
+            document.getElementById('calcDoor').classList.add('door-open');
+            setTimeout(() => {
+                document.getElementById('dashboard').classList.add('show-content');
+                checkInitStatus();
+            }, 400);
+        } else {
+            try { 
+                let res = eval(input); 
+                document.getElementById('calcDisplay').value = Number.isInteger(res) ? res : res.toFixed(2);
+            } catch { document.getElementById('calcDisplay').value = "Error"; }
+        }
+    }
+
+    // --- RESET SYSTEM ---
+    function factoryReset() {
+        if(confirm("DANGER: WIPE EVERYTHING? All progress, history, and PINs will be permanently deleted.")) {
+            localStorage.clear();
+            alert("System wiped successfully.");
+            location.reload();
+        }
+    }
+
+    // --- CORE LOGIC ---
+    function checkInitStatus() {
+        if(localStorage.getItem('startTime')) {
+            document.getElementById('startModule').classList.add('hidden');
+            document.getElementById('activeContent').classList.remove('hidden');
+            const elapsed = Math.floor((Date.now() - localStorage.getItem('startTime')) / 86400000);
+            graphWeekOffset = Math.floor(elapsed / 7);
+            renderVault();
+        }
+    }
+
+    function startChallenge() {
+        localStorage.setItem('startTime', Date.now());
+        localStorage.setItem('totalLen', document.getElementById('setLen').value);
+        checkInitStatus();
+    }
+
+    function renderVault() {
+        const len = parseInt(localStorage.getItem('totalLen'));
+        const container = document.getElementById('tableContent');
+        container.innerHTML = '';
+        let count = 0;
+
+        for(let i=1; i<=len; i++) {
+            let status = localStorage.getItem('day_'+i) === 'true';
+            if(status) count++;
+            container.innerHTML += `<tr>
+                <td><b>D${i}</b></td>
+                <td><input type="checkbox" ${status?'checked':''} onchange="toggleDay(${i}, this.checked)"></td>
+                <td><span class="quote">${motivationData[(i-1)%30][0]}</span><span class="reward">🎁 ${motivationData[(i-1)%30][1]}</span></td>
+            </tr>`;
+        }
+
+        const p = Math.round((count / len) * 100);
+        document.getElementById('percentLabel').innerText = p + "%";
+        document.getElementById('ringProg').style.strokeDashoffset = 408 - (408 * p / 100);
+        
+        updateStats(len);
+        renderGraph();
+        if(p === 100 && !localStorage.victoryConfetti) { triggerConfetti(); localStorage.victoryConfetti = 1; }
+    }
+
+    function toggleDay(i, val) { 
+        localStorage.setItem('day_'+i, val); 
+        renderVault(); 
+    }
+
+    function updateStats(len) {
+        let streak = 0, curr = 0, best = parseInt(localStorage.getItem('bstStr')) || 0;
+        for(let i=1; i<=len; i++) {
+            if(localStorage.getItem('day_'+i) === 'true') { streak++; curr = streak; } 
+            else { if(streak > best) best = streak; streak = 0; curr = 0; }
+        }
+        if(streak > best) best = streak;
+        localStorage.setItem('bstStr', best);
+        document.getElementById('curStr').innerText = curr;
+        document.getElementById('bstStr').innerText = best;
+    }
+
+    function moveGraph(dir) {
+        graphWeekOffset = Math.max(0, graphWeekOffset + dir);
+        renderGraph();
+    }
+
+    function renderGraph() {
+        const g = document.getElementById('progGraph');
+        const len = parseInt(localStorage.getItem('totalLen'));
+        g.innerHTML = '';
+        const start = (graphWeekOffset * 7) + 1;
+        document.getElementById('weekLabel').innerText = `DAYS ${start}-${Math.min(start+6, len)}`;
+        for(let i = start; i < start+7 && i <= len; i++) {
+            const isDone = localStorage.getItem('day_'+i) === 'true';
+            g.innerHTML += `<div class="bar ${isDone?'active':''}" style="height:${isDone?100:15}%"></div>`;
+        }
+    }
+
+    // --- UI HELPERS ---
+    function calcInput(v) { let d = document.getElementById('calcDisplay'); if(d.value === "0") d.value = v; else d.value += v; }
+    function calcClear() { document.getElementById('calcDisplay').value = "0"; }
+    function calcBackspace() { let d = document.getElementById('calcDisplay'); d.value = d.value.slice(0,-1) || "0"; }
+    
+    function openUrge() { 
+        document.getElementById('urgeOverlay').style.display = 'flex'; 
+        let b = document.getElementById('breatheText');
+        setInterval(() => { b.innerText = (b.innerText === "INHALE") ? "EXHALE" : "INHALE"; }, 4000);
+    }
+    function closeUrge() { document.getElementById('urgeOverlay').style.display = 'none'; }
+    
+    function changePin() {
+        const o = document.getElementById('oldPInput').value;
+        const n = document.getElementById('newPInput').value;
+        if(o === getStoredPin() && n.length === 4) {
+            localStorage.setItem('userPin', n);
+            alert("Success: Access PIN changed.");
+        } else { alert("Error: PIN mismatch or invalid format."); }
+    }
+
+    setInterval(() => {
+        document.getElementById('realClock').innerText = new Date().toLocaleTimeString();
+        const start = parseInt(localStorage.getItem('startTime')), len = parseInt(localStorage.getItem('totalLen'));
+        if(start) {
+            const diff = (start + (len * 86400000)) - Date.now();
+            if(diff <= 0) document.getElementById('countDisplay').innerText = "COMPLETE";
+            else {
+                const d = Math.floor(diff/86400000), h = Math.floor((diff%86400000)/3600000), m = Math.floor((diff%3600000)/60000), s = Math.floor((diff%60000)/1000);
+                document.getElementById('countDisplay').innerText = `${d}d ${h}h ${m}m ${s}s`;
+            }
+        }
+    }, 1000);
+
+    window.addEventListener('keydown', (e) => { if(e.key.toLowerCase() === 'h') location.href = "https://www.google.com"; });
+
+    function triggerConfetti() {
+        const c = document.getElementById("confetti"), ctx = c.getContext("2d");
+        c.width = window.innerWidth; c.height = window.innerHeight;
+        let particles = Array.from({length:120}, () => ({x:Math.random()*c.width, y:Math.random()*c.height-c.height, r:Math.random()*6+2, d:Math.random()*5+2, color:`hsl(${Math.random()*360},80%,60%)`}));
+        (function draw(){
+            ctx.clearRect(0,0,c.width,c.height);
+            particles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fillStyle=p.color; ctx.fill(); p.y+=p.d; });
+            requestAnimationFrame(draw);
+        })();
+    }
+</script>
+</body>
+</html>
